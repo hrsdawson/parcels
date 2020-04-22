@@ -383,6 +383,7 @@ class ParticleFile(object):
                 getattr(self, var)[:] = self.read_from_npy(global_file_list_once, 1, var)
 
         self.dataset.close()
+        self.time_written = self.time_written.tolist()
 
     def delete_tempwritedir(self, tempwritedir=None):
         """Deleted all temporary npy files
