@@ -1155,6 +1155,7 @@ class LoopGenerator(object):
         pname = self.ptype.name + 'p'
 
         # ==== Add include for Parcels and math header ==== #
+        ccode += [str(c.Include("omp.h", system=True))]
         ccode += [str(c.Include("parcels.h", system=False))]
         ccode += [str(c.Include("math.h", system=False))]
         ccode += [str(c.Assign('double _next_dt', '0'))]
@@ -1432,7 +1433,9 @@ class ParticleObjectLoopGenerator(object):
                          c.Value("int", "reset_dt"),
                          c.Value("double", "__pdt_prekernels"),
                          c.Value("double", "__dt"),  # 1e-8 = built-in tolerance for np.isclose()
-                         sign_dt, particle_backup, part_loop])
+                         sign_dt, particle_backup,
+                         c.Pragma("omp parallel for private(pnum, sign_end_part, res, __dt, particle_backup, __pdt_prekernels)"),
+                         part_loop])
         fdecl = c.FunctionDeclaration(c.Value("void", "particle_loop"), args)
         ccode += [str(c.FunctionBody(fdecl, fbody))]
         return "\n\n".join(ccode)
