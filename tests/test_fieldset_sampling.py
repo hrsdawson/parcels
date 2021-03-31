@@ -29,9 +29,21 @@ def k_sample_uv_fixture():
     return k_sample_uv()
 
 
+def k_sample_uv_noconvert():
+    def SampleUVNoConvert(particle, fieldset, time):
+        particle.u = fieldset.U.eval(time, particle.depth, particle.lat, particle.lon, applyConversion=False)
+        particle.v = fieldset.V.eval(time, particle.depth, particle.lat, particle.lon, applyConversion=False)
+    return SampleUVNoConvert
+
+
+@pytest.fixture(name="k_sample_uv_noconvert")
+def k_sample_uv_noconvert_fixture():
+    return k_sample_uv_noconvert()
+
+
 def k_sample_p():
     def SampleP(particle, fieldset, time):
-        particle.p = fieldset.P[time, particle.depth, particle.lat, particle.lon]
+        particle.p = fieldset.P[particle]
     return SampleP
 
 
@@ -298,6 +310,22 @@ def test_fieldset_sample_geographic(fieldset_geometric, mode, k_sample_uv, npart
 
 
 @pytest.mark.parametrize('mode', ['scipy', 'jit'])
+def test_fieldset_sample_geographic_noconvert(fieldset_geometric, mode, k_sample_uv_noconvert, npart=120):
+    """ Sample a fieldset without conversion to geographic units. """
+    fieldset = fieldset_geometric
+    lon = np.linspace(-170, 170, npart)
+    lat = np.linspace(-80, 80, npart)
+
+    pset = ParticleSet(fieldset, pclass=pclass(mode), lon=lon, lat=np.zeros(npart) + 70.)
+    pset.execute(pset.Kernel(k_sample_uv_noconvert), endtime=1., dt=1.)
+    assert np.allclose(pset.v, lon * 1000 * 1.852 * 60, rtol=1e-6)
+
+    pset = ParticleSet(fieldset, pclass=pclass(mode), lat=lat, lon=np.zeros(npart) - 45.)
+    pset.execute(pset.Kernel(k_sample_uv_noconvert), endtime=1., dt=1.)
+    assert np.allclose(pset.u, lat * 1000 * 1.852 * 60, rtol=1e-6)
+
+
+@pytest.mark.parametrize('mode', ['scipy', 'jit'])
 def test_fieldset_sample_geographic_polar(fieldset_geometric_polar, mode, k_sample_uv, npart=120):
     """ Sample a fieldset with conversion to geographic units and a pole correction. """
     fieldset = fieldset_geometric_polar
@@ -441,7 +469,7 @@ def test_sampling_out_of_bounds_time(mode, allow_time_extrapolation, k_sample_p,
 
 @pytest.mark.parametrize('mode', ['jit', 'scipy'])
 @pytest.mark.parametrize('npart', [1, 10])
-@pytest.mark.parametrize('chs', [False, 'auto', (10, 10)])
+@pytest.mark.parametrize('chs', [False, 'auto', {'lat': ('y', 10), 'lon': ('x', 10)}])
 def test_sampling_multigrids_non_vectorfield_from_file(mode, npart, tmpdir, chs, filename='test_subsets'):
     xdim, ydim = 100, 200
     filepath = tmpdir.join(filename)
@@ -468,10 +496,13 @@ def test_sampling_multigrids_non_vectorfield_from_file(mode, npart, tmpdir, chs,
     variables = {'U': 'vozocrtx', 'V': 'vomecrty', 'B': 'B'}
     dimensions = {'lon': 'nav_lon', 'lat': 'nav_lat'}
     fieldset = FieldSet.from_netcdf(files, variables, dimensions, timestamps=timestamps, allow_time_extrapolation=True,
-                                    field_chunksize=chs)
+                                    chunksize=chs)
 
     fieldset.add_constant('sample_depth', 2.5)
-    assert fieldset.U.grid is fieldset.V.grid
+    if chs == 'auto':
+        assert fieldset.U.grid != fieldset.V.grid
+    else:
+        assert fieldset.U.grid is fieldset.V.grid
     assert fieldset.U.grid is not fieldset.B.grid
 
     class TestParticle(ptype[mode]):
@@ -575,17 +606,16 @@ def test_multiple_grid_addlater_error():
               lat=np.linspace(0., 1., ydim, dtype=np.float32))
     fieldset = FieldSet(U, V)
 
-    pset = ParticleSet(fieldset, pclass=pclass('jit'), lon=[0.8], lat=[0.9])
+    pset = ParticleSet(fieldset, pclass=pclass('jit'), lon=[0.8], lat=[0.9])  # noqa ; to trigger fieldset.check_complete
 
     P = Field('P', np.zeros((ydim*10, xdim*10), dtype=np.float32),
               lon=np.linspace(0., 1., xdim*10, dtype=np.float32),
               lat=np.linspace(0., 1., ydim*10, dtype=np.float32))
-    fieldset.add_field(P)
 
     fail = False
     try:
-        pset.execute(AdvectionRK4, runtime=10, dt=1)
-    except:
+        fieldset.add_field(P)
+    except RuntimeError:
         fail = True
     assert fail
 
