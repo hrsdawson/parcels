@@ -372,7 +372,7 @@ class ParticleSetSOA(BaseParticleSet):
                            'setting a new repeatdt will start particles from the _new_ particle '
                            'locations.' % filename)
 
-        pfile = xr.open_dataset(str(filename), decode_cf=True)
+        pfile = xr.open_dataset(str(filename), decode_cf=False)
         pfile_vars = [v for v in pfile.data_vars]
 
         vars = {}
