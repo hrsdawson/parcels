@@ -217,7 +217,7 @@ class BaseParticleFile(ABC):
 
         for vname in self.var_names:
             if vname not in self._reserved_var_names():
-                setattr(self, vname, self.dataset.createVariable(vname, "f4", coords, fill_value=np.nan))
+                setattr(self, vname, self.dataset.createVariable(vname, "f4", coords, fill_value=np.nan, zlib=True))
                 getattr(self, vname).long_name = ""
                 getattr(self, vname).standard_name = vname
                 getattr(self, vname).units = "unknown"
